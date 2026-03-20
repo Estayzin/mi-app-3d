@@ -3,43 +3,59 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Worlds Tutorial</title>
+    <title>UserInterface Tutorial</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      body {
-        background: #202932;
-        overflow: hidden;
-        font-family: 'Inter', sans-serif;
-      }
-      #container { position: absolute; inset: 0; width: 100vw; height: 100vh; }
-      .options-menu { position: fixed; top: 1rem; right: 1rem; z-index: 100; min-width: 220px; }
-      .options-menu-visible { display: block !important; }
-      .phone-menu-toggler { position: fixed; bottom: 1rem; right: 1rem; z-index: 200; display: none; }
-      @media (max-width: 640px) {
-        .options-menu { display: none; }
-        .phone-menu-toggler { display: block; }
-      }
-
-      /* Ocultar el texto "MB" del widget Stats.js */
-      #stats canvas + div {
-        display: none !important;
-      }
+      html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Inter', sans-serif; }
+      bim-grid { width: 100%; height: 100%; }
+      #container { width: 100%; height: 100%; position: relative; overflow: hidden; }
     </style>
   </head>
   <body>
-    <div id="container"></div>
+    <bim-grid id="grid">
+      <bim-toolbars-container style="grid-area: header">
+        <bim-toolbar label="That Open App" active>
+          <bim-toolbar-section label="Navegación">
+            <bim-button vertical label="Mi App" icon="solar:bookmark-square-minimalistic-bold"></bim-button>
+            <bim-toolbar-group>
+              <bim-button icon="solar:album-bold"></bim-button>
+              <bim-button icon="solar:archive-linear"></bim-button>
+              <bim-button icon="solar:battery-charge-minimalistic-broken"></bim-button>
+              <bim-button icon="solar:bluetooth-square-outline"></bim-button>
+            </bim-toolbar-group>
+          </bim-toolbar-section>
+        </bim-toolbar>
+        <bim-toolbar label="Herramientas">
+          <bim-toolbar-section label="BIM">
+            <bim-button vertical label="Medir" icon="bx:command"></bim-button>
+            <bim-button vertical label="Cortar" icon="bx:fast-forward-circle"></bim-button>
+            <bim-button vertical label="Info" icon="bx:support"></bim-button>
+          </bim-toolbar-section>
+        </bim-toolbar>
+      </bim-toolbars-container>
+      <div id="my-panel" style="grid-area: sidebar; background-color: var(--bim-ui_bg-base)">
+        <bim-panel label="Controles">
+          <bim-panel-section label="Escena">
+            <bim-text-input label="Nombre del proyecto" value="Mi App 3D"></bim-text-input>
+            <bim-input label="Posición cámara" vertical>
+              <bim-number-input pref="X" min="1" value="68" max="100" suffix="m" slider></bim-number-input>
+              <bim-number-input pref="Y" min="1" value="23" max="100" suffix="m" slider></bim-number-input>
+              <bim-number-input pref="Z" min="-50" value="-8" max="50" suffix="m" slider></bim-number-input>
+            </bim-input>
+            <bim-dropdown label="Categoría IFC">
+              <bim-option label="IFCWALL"></bim-option>
+              <bim-option label="IFCWINDOW"></bim-option>
+              <bim-option label="IFCSLAB"></bim-option>
+              <bim-option label="IFCDOOR"></bim-option>
+            </bim-dropdown>
+          </bim-panel-section>
+        </bim-panel>
+      </div>
+      <div id="container" style="grid-area: content"></div>
+    </bim-grid>
     <script type="module" src="/src/main.js"></script>
-    <script>
-      /* Ocultar el label "MB" de Stats.js una vez que se monte */
-      const observer = new MutationObserver(() => {
-        document.querySelectorAll('#stats > div').forEach(el => {
-          if (el.textContent.trim() === 'MB') el.style.display = 'none';
-        });
-      });
-      observer.observe(document.body, { childList: true, subtree: true });
-    </script>
   </body>
 </html>

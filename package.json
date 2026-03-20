@@ -10,6 +10,7 @@
     "@thatopen/components-front": "^3.3.3",
     "@thatopen/fragments": "^3.3.6",
     "@thatopen/ui": "*",
+    "@thatopen/ui-obc": "^3.3.3",
     "stats.js": "*",
     "three": "*"
   },
