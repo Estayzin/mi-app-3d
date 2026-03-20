@@ -1,24 +1,48 @@
-import Stats from "stats.js";
-import * as BUI from "@thatopen/ui";
 import * as OBC from "@thatopen/components";
+import * as BUI from "@thatopen/ui";
+import * as BUIC from "@thatopen/ui-obc";
+import Stats from "stats.js";
+
+BUI.Manager.init();
 
 const components = new OBC.Components();
 const worlds = components.get(OBC.Worlds);
 const world = worlds.create();
+world.name = "main";
 
-world.scene = new OBC.SimpleScene(components);
-world.scene.setup();
+const sceneComponent = new OBC.SimpleScene(components);
+sceneComponent.setup();
+world.scene = sceneComponent;
 world.scene.three.background = null;
 
 const container = document.getElementById("container");
-world.renderer = new OBC.SimpleRenderer(components, container);
-world.camera = new OBC.OrthoPerspectiveCamera(components);
-await world.camera.controls.setLookAt(78, 20, -2.2, 26, -4, 25);
+const rendererComponent = new OBC.SimpleRenderer(components, container);
+world.renderer = rendererComponent;
+
+const cameraComponent = new OBC.SimpleCamera(components);
+world.camera = cameraComponent;
+
+container.addEventListener("resize", () => {
+  rendererComponent.resize();
+  cameraComponent.updateAspect();
+});
+
+const viewerGrids = components.get(OBC.Grids);
+viewerGrids.create(world);
 
 components.init();
-components.get(OBC.Grids).create(world);
 
-// FragmentsManager
+// IfcLoader setup
+const ifcLoader = components.get(OBC.IfcLoader);
+await ifcLoader.setup({
+  autoSetWasm: false,
+  wasm: {
+    path: "/web-ifc/",
+    absolute: true,
+  },
+});
+
+// FragmentsManager setup
 const githubUrl = "https://thatopen.github.io/engine_fragment/resources/worker.mjs";
 const fetchedUrl = await fetch(githubUrl);
 const workerBlob = await fetchedUrl.blob();
@@ -29,10 +53,10 @@ fragments.init(workerUrl);
 
 world.camera.controls.addEventListener("update", () => fragments.core.update());
 
-fragments.list.onItemSet.add(({ value: model }) => {
+fragments.list.onItemSet.add(async ({ value: model }) => {
   model.useCamera(world.camera.three);
   world.scene.three.add(model.object);
-  fragments.core.update(true);
+  await fragments.core.update(true);
 });
 
 fragments.core.models.materials.list.onItemSet.add(({ value: material }) => {
@@ -43,111 +67,42 @@ fragments.core.models.materials.list.onItemSet.add(({ value: material }) => {
   }
 });
 
-// Cargar fragments
-const loadFragments = async () => {
-  const fragPaths = [
-    "https://thatopen.github.io/engine_components/resources/frags/school_arq.frag",
-    "https://thatopen.github.io/engine_components/resources/frags/school_str.frag",
-  ];
-  await Promise.all(
-    fragPaths.map(async (path) => {
-      const modelId = path.split("/").pop()?.split(".").shift();
-      if (!modelId) return null;
-      const file = await fetch(path);
+// ModelsList y botón de carga preconstruidos
+const [modelsList] = BUIC.tables.modelsList({
+  components,
+  metaDataTags: ["schema"],
+  actions: { download: true },
+});
+
+const panel = BUI.Component.create(() => {
+  const onLoadIfc = async ({ target }) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".ifc";
+    input.onchange = async () => {
+      if (!input.files?.[0]) return;
+      target.loading = true;
+      target.label = "Cargando...";
+      const file = input.files[0];
       const buffer = await file.arrayBuffer();
-      return fragments.core.load(buffer, { modelId });
-    }),
-  );
-};
-
-// Exportar fragments
-const downloadFragments = async () => {
-  for (const [, model] of fragments.list) {
-    const fragsBuffer = await model.getBuffer(false);
-    const file = new File([fragsBuffer], `${model.modelId}.frag`);
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(file);
-    link.download = file.name;
-    link.click();
-    URL.revokeObjectURL(link.href);
-  }
-};
-
-// Eliminar modelos
-const deleteArchModel = () => {
-  const modelIds = [...fragments.list.keys()];
-  const modelId = modelIds.find((key) => /arq/.test(key));
-  if (!modelId) return;
-  fragments.core.disposeModel(modelId);
-};
-
-const deleteAllModels = () => {
-  for (const [modelId] of fragments.list) {
-    fragments.core.disposeModel(modelId);
-  }
-};
-
-// Stats
-const stats = new Stats();
-stats.showPanel(2);
-document.body.append(stats.dom);
-stats.dom.style.left = "0px";
-stats.dom.style.zIndex = "unset";
-const statsLabel = stats.dom.querySelector("div:last-child");
-if (statsLabel) statsLabel.style.display = "none";
-world.renderer.onBeforeUpdate.add(() => stats.begin());
-world.renderer.onAfterUpdate.add(() => stats.end());
-
-// UI
-BUI.Manager.init();
-
-const [panel, updatePanel] = BUI.Component.create((_) => {
-  const onLoadFragments = async ({ target }) => {
-    target.loading = true;
-    await loadFragments();
-    target.loading = false;
+      await ifcLoader.load(new Uint8Array(buffer), false, file.name, {});
+      target.loading = false;
+      target.label = "Cargar IFC";
+    };
+    input.click();
   };
 
-  let loadFragmentsBtn;
-  if (fragments.list.size === 0) {
-    loadFragmentsBtn = BUI.html`
-      <bim-button label="Load fragments" @click=${onLoadFragments}></bim-button>
-    `;
-  }
-
-  let disposeArchModelBtn;
-  if ([...fragments.list.keys()].some((key) => /arq/.test(key))) {
-    disposeArchModelBtn = BUI.html`
-      <bim-button label="Dispose Arch Model" @click=${deleteArchModel}></bim-button>
-    `;
-  }
-
-  let downloadFragmentsBtn;
-  let disposeModelsBtn;
-  if (fragments.list.size > 0) {
-    disposeModelsBtn = BUI.html`
-      <bim-button label="Dispose All Models" @click=${deleteAllModels}></bim-button>
-    `;
-    downloadFragmentsBtn = BUI.html`
-      <bim-button label="Export fragments" @click=${downloadFragments}></bim-button>
-    `;
-  }
-
   return BUI.html`
-    <bim-panel active label="FragmentsManager Tutorial" class="options-menu">
-      <bim-panel-section label="Controls">
-        ${loadFragmentsBtn}
-        ${disposeArchModelBtn}
-        ${disposeModelsBtn}
-        ${downloadFragmentsBtn}
+    <bim-panel active label="IFC Models" class="options-menu">
+      <bim-panel-section label="Importing">
+        <bim-button label="Cargar IFC" @click=${onLoadIfc}></bim-button>
+      </bim-panel-section>
+      <bim-panel-section icon="mage:box-3d-fill" label="Loaded Models">
+        ${modelsList}
       </bim-panel-section>
     </bim-panel>
   `;
-}, {});
-
-const updateFunction = () => updatePanel();
-fragments.list.onItemSet.add(updateFunction);
-fragments.list.onItemDeleted.add(updateFunction);
+});
 
 document.body.append(panel);
 
@@ -166,3 +121,14 @@ const button = BUI.Component.create(() => {
 });
 
 document.body.append(button);
+
+// Stats
+const stats = new Stats();
+stats.showPanel(2);
+document.body.append(stats.dom);
+stats.dom.style.left = "0px";
+stats.dom.style.zIndex = "unset";
+const statsLabel = stats.dom.querySelector("div:last-child");
+if (statsLabel) statsLabel.style.display = "none";
+world.renderer.onBeforeUpdate.add(() => stats.begin());
+world.renderer.onAfterUpdate.add(() => stats.end());
