@@ -1,5 +1,6 @@
-import * as OBC from "@thatopen/components";
 import * as BUI from "@thatopen/ui";
+import * as OBC from "@thatopen/components";
+import * as OBCF from "@thatopen/components-front";
 import * as BUIC from "@thatopen/ui-obc";
 import Stats from "stats.js";
 
@@ -21,28 +22,26 @@ world.renderer = rendererComponent;
 
 const cameraComponent = new OBC.SimpleCamera(components);
 world.camera = cameraComponent;
+await world.camera.controls.setLookAt(65, 19, -27, 12.6, -5, -1.4);
 
 container.addEventListener("resize", () => {
   rendererComponent.resize();
   cameraComponent.updateAspect();
 });
 
-const viewerGrids = components.get(OBC.Grids);
-viewerGrids.create(world);
-
 components.init();
 
-// IfcLoader setup
+const grids = components.get(OBC.Grids);
+grids.create(world);
+
+// IfcLoader
 const ifcLoader = components.get(OBC.IfcLoader);
 await ifcLoader.setup({
   autoSetWasm: false,
-  wasm: {
-    path: "/web-ifc/",
-    absolute: true,
-  },
+  wasm: { path: "/web-ifc/", absolute: true },
 });
 
-// FragmentsManager setup
+// FragmentsManager
 const githubUrl = "https://thatopen.github.io/engine_fragment/resources/worker.mjs";
 const fetchedUrl = await fetch(githubUrl);
 const workerBlob = await fetchedUrl.blob();
@@ -51,12 +50,12 @@ const workerUrl = URL.createObjectURL(workerFile);
 const fragments = components.get(OBC.FragmentsManager);
 fragments.init(workerUrl);
 
-world.camera.controls.addEventListener("update", () => fragments.core.update());
+world.camera.controls.addEventListener("update", () => fragments.core.update(true));
 
-fragments.list.onItemSet.add(async ({ value: model }) => {
+fragments.list.onItemSet.add(({ value: model }) => {
   model.useCamera(world.camera.three);
   world.scene.three.add(model.object);
-  await fragments.core.update(true);
+  fragments.core.update(true);
 });
 
 fragments.core.models.materials.list.onItemSet.add(({ value: material }) => {
@@ -67,14 +66,40 @@ fragments.core.models.materials.list.onItemSet.add(({ value: material }) => {
   }
 });
 
-// ModelsList y botón de carga preconstruidos
-const [modelsList] = BUIC.tables.modelsList({
+// Tabla de propiedades
+const [propertiesTable, updatePropertiesTable] = BUIC.tables.itemsData({
   components,
-  metaDataTags: ["schema"],
-  actions: { download: true },
+  modelIdMap: {},
 });
 
-const panel = BUI.Component.create(() => {
+propertiesTable.preserveStructureOnFilter = true;
+propertiesTable.indentationInText = false;
+
+// Highlighter - selección de elementos
+const highlighter = components.get(OBCF.Highlighter);
+highlighter.setup({ world });
+
+highlighter.events.select.onHighlight.add((modelIdMap) => {
+  updatePropertiesTable({ modelIdMap });
+});
+
+highlighter.events.select.onClear.add(() =>
+  updatePropertiesTable({ modelIdMap: {} })
+);
+
+// Stats
+const stats = new Stats();
+stats.showPanel(2);
+document.body.append(stats.dom);
+stats.dom.style.left = "0px";
+stats.dom.style.zIndex = "unset";
+const statsLabel = stats.dom.querySelector("div:last-child");
+if (statsLabel) statsLabel.style.display = "none";
+world.renderer.onBeforeUpdate.add(() => stats.begin());
+world.renderer.onAfterUpdate.add(() => stats.end());
+
+// Panel de propiedades
+const propertiesPanel = BUI.Component.create(() => {
   const onLoadIfc = async ({ target }) => {
     const input = document.createElement("input");
     input.type = "file";
@@ -92,28 +117,46 @@ const panel = BUI.Component.create(() => {
     input.click();
   };
 
+  const onTextInput = (e) => {
+    const input = e.target;
+    propertiesTable.queryString = input.value !== "" ? input.value : null;
+  };
+
+  const expandTable = (e) => {
+    const button = e.target;
+    propertiesTable.expanded = !propertiesTable.expanded;
+    button.label = propertiesTable.expanded ? "Collapse" : "Expand";
+  };
+
+  const copyAsTSV = async () => {
+    await navigator.clipboard.writeText(propertiesTable.tsv);
+  };
+
   return BUI.html`
-    <bim-panel active label="IFC Models" class="options-menu">
-      <bim-panel-section label="Importing">
+    <bim-panel active label="Properties" class="options-menu" style="max-height: 90vh; overflow-y: auto;">
+      <bim-panel-section label="Element Data">
         <bim-button label="Cargar IFC" @click=${onLoadIfc}></bim-button>
-      </bim-panel-section>
-      <bim-panel-section icon="mage:box-3d-fill" label="Loaded Models">
-        ${modelsList}
+        <div style="display: flex; gap: 0.5rem;">
+          <bim-button @click=${expandTable} label="Expand"></bim-button>
+          <bim-button @click=${copyAsTSV} label="Copy as TSV"></bim-button>
+        </div>
+        <bim-text-input @input=${onTextInput} placeholder="Search Property" debounce="250"></bim-text-input>
+        ${propertiesTable}
       </bim-panel-section>
     </bim-panel>
   `;
 });
 
-document.body.append(panel);
+document.body.append(propertiesPanel);
 
 const button = BUI.Component.create(() => {
   return BUI.html`
     <bim-button class="phone-menu-toggler" icon="solar:settings-bold"
       @click="${() => {
-        if (panel.classList.contains("options-menu-visible")) {
-          panel.classList.remove("options-menu-visible");
+        if (propertiesPanel.classList.contains("options-menu-visible")) {
+          propertiesPanel.classList.remove("options-menu-visible");
         } else {
-          panel.classList.add("options-menu-visible");
+          propertiesPanel.classList.add("options-menu-visible");
         }
       }}">
     </bim-button>
@@ -121,14 +164,3 @@ const button = BUI.Component.create(() => {
 });
 
 document.body.append(button);
-
-// Stats
-const stats = new Stats();
-stats.showPanel(2);
-document.body.append(stats.dom);
-stats.dom.style.left = "0px";
-stats.dom.style.zIndex = "unset";
-const statsLabel = stats.dom.querySelector("div:last-child");
-if (statsLabel) statsLabel.style.display = "none";
-world.renderer.onBeforeUpdate.add(() => stats.begin());
-world.renderer.onAfterUpdate.add(() => stats.end());
