@@ -1,0 +1,19 @@
+{
+  "name": "mi-app-3d",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite"
+  },
+  "dependencies": {
+    "@thatopen/components": "*",
+    "@thatopen/components-front": "^3.3.3",
+    "@thatopen/fragments": "^3.3.6",
+    "@thatopen/ui": "*",
+    "stats.js": "*",
+    "three": "*"
+  },
+  "devDependencies": {
+    "vite": "*"
+  }
+}

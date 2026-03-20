@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Worlds Tutorial – That Open Components</title>
+    <script type="module" src="https://unpkg.com/@thatopen/ui/dist/core.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { background: #202932; overflow: hidden; font-family: sans-serif; }
+      #container { position: absolute; inset: 0; width: 100vw; height: 100vh; }
+      .options-menu { position: fixed; top: 1rem; right: 1rem; z-index: 100; min-width: 220px; }
+      .options-menu-visible { display: block !important; }
+      .phone-menu-toggler { position: fixed; bottom: 1rem; right: 1rem; z-index: 200; display: none; }
+      @media (max-width: 640px) {
+        .options-menu { display: none; }
+        .phone-menu-toggler { display: block; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="container"></div>
+    <script type="module">
+      import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+      import Stats from "https://unpkg.com/stats.js@0.17.0/src/Stats.js";
+      import * as OBC from "https://unpkg.com/@thatopen/components/dist/core.js";
+      import * as BUI from "https://unpkg.com/@thatopen/ui/dist/core.js";
+
+      const container = document.getElementById("container");
+      const components = new OBC.Components();
+      const worlds = components.get(OBC.Worlds);
+      const world = worlds.create();
+
+      world.scene    = new OBC.SimpleScene(components);
+      world.renderer = new OBC.SimpleRenderer(components, container);
+      world.camera   = new OBC.SimpleCamera(components);
+
+      components.init();
+      world.scene.setup();
+      world.scene.three.background = null;
+
+      const githubUrl  = "https://thatopen.github.io/engine_fragment/resources/worker.mjs";
+      const fetchedUrl = await fetch(githubUrl);
+      const workerBlob = await fetchedUrl.blob();
+      const workerFile = new File([workerBlob], "worker.mjs", { type: "text/javascript" });
+      const workerUrl  = URL.createObjectURL(workerFile);
+
+      const fragments = components.get(OBC.FragmentsManager);
+      fragments.init(workerUrl);
+
+      world.camera.controls.addEventListener("update", () => fragments.core.update());
+
+      fragments.core.models.materials.list.onItemSet.add(({ value: material }) => {
+        if (!("isLodMaterial" in material && material.isLodMaterial)) {
+          material.polygonOffset       = true;
+          material.polygonOffsetUnits  = 1;
+          material.polygonOffsetFactor = Math.random();
+        }
+      });
+
+      fragments.list.onItemSet.add(({ value: model }) => {
+        model.useCamera(world.camera.three);
+        world.scene.three.add(model.object);
+        fragments.core.update(true);
+      });
+
+      const fragPaths = [
+        "https://thatopen.github.io/engine_components/resources/frags/school_arq.frag",
+      ];
+
+      await Promise.all(
+        fragPaths.map(async (path) => {
+          const modelId = path.split("/").pop()?.split(".").shift();
+          if (!modelId) return null;
+          const file   = await fetch(path);
+          const buffer = await file.arrayBuffer();
+          return fragments.core.load(buffer, { modelId });
+        })
+      );
+
+      await world.camera.controls.setLookAt(68, 23, -8.5, 21.5, -5.5, 23);
+      await fragments.core.update(true);
+
+      BUI.Manager.init();
+
+      const panel = BUI.Component.create(() => {
+        return BUI.html`
+          <bim-panel label="Worlds Tutorial" class="options-menu">
+            <bim-panel-section label="Controls">
+
+              <bim-color-input
+                label="Background Color" color="#202932"
+                @input="${({ target }) => {
+                  world.scene.config.backgroundColor = new THREE.Color(target.color);
+                }}">
+              </bim-color-input>
+
+              <bim-number-input
+                slider step="0.1" label="Directional lights intensity" value="1.5" min="0.1" max="10"
+                @change="${({ target }) => {
+                  world.scene.config.directionalLight.intensity = target.value;
+                }}">
+              </bim-number-input>
+
+              <bim-number-input
+                slider step="0.1" label="Ambient light intensity" value="1" min="0.1" max="5"
+                @change="${({ target }) => {
+                  world.scene.config.ambientLight.intensity = target.value;
+                }}">
+              </bim-number-input>
+
+            </bim-panel-section>
+          </bim-panel>
+        `;
+      });
+
+      document.body.append(panel);
+
+      const button = BUI.Component.create(() => {
+        return BUI.html`
+
+          <bim-button class="phone-menu-toggler" icon="solar:settings-bold"
+            @click="${() => {
+              if (panel.classList.contains("options-menu-visible")) {
+                panel.classList.remove("options-menu-visible");
+              } else {
+                panel.classList.add("options-menu-visible");
+              }
+            }}">
+          </bim-button>
+        `;
+      });
+
+      document.body.append(button);
+
+      const stats = new Stats();
+      stats.showPanel(2);
+      document.body.append(stats.dom);
+      stats.dom.style.left   = "0px";
+      stats.dom.style.zIndex = "unset";
+      world.renderer.onBeforeUpdate.add(() => stats.begin());
+      world.renderer.onAfterUpdate.add(() => stats.end());
+
+    </script>
+  </body>
+</html>

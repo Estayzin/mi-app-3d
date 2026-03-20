@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Worlds Tutorial</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        background: #202932;
+        overflow: hidden;
+        font-family: 'Inter', sans-serif;
+      }
+      #container { position: absolute; inset: 0; width: 100vw; height: 100vh; }
+      .options-menu { position: fixed; top: 1rem; right: 1rem; z-index: 100; min-width: 220px; }
+      .options-menu-visible { display: block !important; }
+      .phone-menu-toggler { position: fixed; bottom: 1rem; right: 1rem; z-index: 200; display: none; }
+      @media (max-width: 640px) {
+        .options-menu { display: none; }
+        .phone-menu-toggler { display: block; }
+      }
+
+      /* Ocultar el texto "MB" del widget Stats.js */
+      #stats canvas + div {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="container"></div>
+    <script type="module" src="/src/main.js"></script>
+    <script>
+      /* Ocultar el label "MB" de Stats.js una vez que se monte */
+      const observer = new MutationObserver(() => {
+        document.querySelectorAll('#stats > div').forEach(el => {
+          if (el.textContent.trim() === 'MB') el.style.display = 'none';
+        });
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    </script>
+  </body>
+</html>
